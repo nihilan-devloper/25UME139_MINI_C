@@ -31,6 +31,8 @@ void logTransaction(const char *action, int acctNum, double amount, const char *
 int compareByBalance(const void *a, const void *b);
 void applyInterest(FILE *fPtr);
 void generateReport(FILE *readPtr);
+void exportToCSV(FILE *readPtr);
+void accountStatement(void);
 
 int main(int argc, char *argv[])
 {
@@ -48,7 +50,7 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 13)
+    while ((choice = enterChoice()) != 15)
     {
         switch (choice)
         {
@@ -87,6 +89,12 @@ int main(int argc, char *argv[])
             break;
         case 12:
             generateReport(cfPtr);
+            break;
+        case 13:
+            exportToCSV(cfPtr);
+            break;
+        case 14:
+            accountStatement();
             break;
         default:
             puts("Incorrect choice");
@@ -312,7 +320,9 @@ unsigned int enterChoice(void)
                  "10 - reset database\n"
                  "11 - apply interest\n"
                  "12 - generate summary report\n"
-                 "13 - end program\n? ");
+                 "13 - export database to CSV\n"
+                 "14 - print account statement\n"
+                 "15 - end program\n? ");
 
     if (scanf("%u", &menuChoice) != 1)
     {
@@ -687,4 +697,77 @@ void generateReport(FILE *readPtr)
     printf("Highest Balance:       $%.2f (Account #%d)\n", highestBalance, highestAcct);
     printf("Lowest Balance:        $%.2f (Account #%d)\n", lowestBalance, lowestAcct);
     printf("---------------------------\n\n");
+}
+
+// export all accounts to a CSV file
+void exportToCSV(FILE *readPtr)
+{
+    FILE *writePtr;
+    struct clientData client = {0, "", "", 0.0};
+
+    if ((writePtr = fopen("accounts.csv", "w")) == NULL)
+    {
+        puts("CSV file could not be opened.");
+    }
+    else
+    {
+        rewind(readPtr);
+        fprintf(writePtr, "AccountNumber,LastName,FirstName,Balance\n");
+
+        while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
+        {
+            if (client.acctNum != 0)
+            {
+                fprintf(writePtr, "%d,%s,%s,%.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
+            }
+        }
+
+        fclose(writePtr);
+        puts("Successfully exported accounts to accounts.csv");
+    }
+}
+
+// print transaction statement for a specific account
+void accountStatement(void)
+{
+    FILE *logPtr;
+    unsigned int accountNum;
+    char line[200];
+    int found = 0;
+
+    printf("Enter account number for statement ( 1 - 100 ): ");
+    if (scanf("%d", &accountNum) != 1) {
+        clearInputBuffer();
+        accountNum = 0;
+    }
+
+    if (accountNum < 1 || accountNum > 100) {
+        puts("Invalid account number.");
+        return;
+    }
+
+    if ((logPtr = fopen("transactions.log", "r")) == NULL)
+    {
+        puts("No transaction log found.");
+        return;
+    }
+
+    printf("\n--- STATEMENT FOR ACCOUNT #%d ---\n", accountNum);
+    char searchStr[20];
+    sprintf(searchStr, "Acct: %-4d", accountNum);
+
+    while (fgets(line, sizeof(line), logPtr) != NULL)
+    {
+        if (strstr(line, searchStr) != NULL)
+        {
+            printf("%s", line);
+            found = 1;
+        }
+    }
+    
+    if (!found) {
+        puts("No transactions found for this account.");
+    }
+    printf("--------------------------------\n\n");
+    fclose(logPtr);
 }
