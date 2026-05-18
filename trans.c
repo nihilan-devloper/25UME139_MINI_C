@@ -22,6 +22,9 @@ void deleteRecord(FILE *fPtr);
 void displayAccounts(FILE *readPtr);
 void searchAccount(FILE *readPtr);
 void readAccount(FILE *readPtr);
+void transferFunds(FILE *fPtr);
+void searchFirstName(FILE *readPtr);
+void resetDatabase(FILE *fPtr);
 void clearInputBuffer(void);
 
 int main(int argc, char *argv[])
@@ -40,39 +43,40 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 8)
+    while ((choice = enterChoice()) != 11)
     {
         switch (choice)
         {
-        // create text file from record file
         case 1:
             textFile(cfPtr);
             break;
-        // update record
         case 2:
             updateRecord(cfPtr);
             break;
-        // create record
         case 3:
             newRecord(cfPtr);
             break;
-        // delete existing record
         case 4:
             deleteRecord(cfPtr);
             break;
-        // display all accounts
         case 5:
             displayAccounts(cfPtr);
             break;
-        // search accounts
         case 6:
             searchAccount(cfPtr);
             break;
-        // read specific account
         case 7:
             readAccount(cfPtr);
             break;
-        // display if user does not select valid choice
+        case 8:
+            transferFunds(cfPtr);
+            break;
+        case 9:
+            searchFirstName(cfPtr);
+            break;
+        case 10:
+            resetDatabase(cfPtr);
+            break;
         default:
             puts("Incorrect choice");
             break;
@@ -286,7 +290,10 @@ unsigned int enterChoice(void)
                  "5 - display all active accounts\n"
                  "6 - search account by last name\n"
                  "7 - read account by ID\n"
-                 "8 - end program\n? ");
+                 "8 - transfer funds\n"
+                 "9 - search account by first name\n"
+                 "10 - reset database\n"
+                 "11 - end program\n? ");
 
     if (scanf("%u", &menuChoice) != 1)
     {
@@ -393,3 +400,145 @@ void readAccount(FILE *readPtr)
         printf("%-6d%-16s%-11s%10.2f\n\n", client.acctNum, client.lastName, client.firstName, client.balance);
     }
 } // end readAccount
+
+// transfer funds between two accounts
+void transferFunds(FILE *fPtr)
+{
+    unsigned int sourceAcct, destAcct;
+    double amount;
+    struct clientData sourceClient = {0, "", "", 0.0};
+    struct clientData destClient = {0, "", "", 0.0};
+
+    printf("Enter source account ( 1 - 100 ): ");
+    if (scanf("%d", &sourceAcct) != 1) {
+        clearInputBuffer();
+        sourceAcct = 0;
+    }
+
+    if (sourceAcct < 1 || sourceAcct > 100) {
+        puts("Invalid source account number.");
+        return;
+    }
+
+    printf("Enter destination account ( 1 - 100 ): ");
+    if (scanf("%d", &destAcct) != 1) {
+        clearInputBuffer();
+        destAcct = 0;
+    }
+
+    if (destAcct < 1 || destAcct > 100) {
+        puts("Invalid destination account number.");
+        return;
+    }
+
+    if (sourceAcct == destAcct) {
+        puts("Cannot transfer to the same account.");
+        return;
+    }
+
+    // Read Source
+    fseek(fPtr, (sourceAcct - 1) * sizeof(struct clientData), SEEK_SET);
+    fread(&sourceClient, sizeof(struct clientData), 1, fPtr);
+
+    if (sourceClient.acctNum == 0) {
+        printf("Source account #%d has no information.\n", sourceAcct);
+        return;
+    }
+
+    // Read Dest
+    fseek(fPtr, (destAcct - 1) * sizeof(struct clientData), SEEK_SET);
+    fread(&destClient, sizeof(struct clientData), 1, fPtr);
+
+    if (destClient.acctNum == 0) {
+        printf("Destination account #%d has no information.\n", destAcct);
+        return;
+    }
+
+    printf("Enter amount to transfer: ");
+    if (scanf("%lf", &amount) != 1) {
+        clearInputBuffer();
+        puts("Invalid input.");
+        return;
+    }
+
+    if (amount <= 0) {
+        puts("Transfer amount must be greater than zero.");
+        return;
+    }
+
+    if (sourceClient.balance < amount) {
+        printf("Error: Insufficient funds in source account. Current balance: %.2f\n", sourceClient.balance);
+        return;
+    }
+
+    // Process
+    sourceClient.balance -= amount;
+    destClient.balance += amount;
+
+    // Save Source
+    fseek(fPtr, (sourceAcct - 1) * sizeof(struct clientData), SEEK_SET);
+    fwrite(&sourceClient, sizeof(struct clientData), 1, fPtr);
+
+    // Save Dest
+    fseek(fPtr, (destAcct - 1) * sizeof(struct clientData), SEEK_SET);
+    fwrite(&destClient, sizeof(struct clientData), 1, fPtr);
+
+    printf("Successfully transferred %.2f from account %d to %d.\n", amount, sourceAcct, destAcct);
+}
+
+// search for account by first name
+void searchFirstName(FILE *readPtr)
+{
+    struct clientData client = {0, "", "", 0.0};
+    char searchName[15];
+    int found = 0;
+
+    printf("Enter first name to search: ");
+    if (scanf("%9s", searchName) != 1)
+    {
+        puts("Invalid input.");
+        clearInputBuffer();
+        return;
+    }
+
+    rewind(readPtr);
+    printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+    printf("--------------------------------------------\n");
+
+    while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
+    {
+        if (client.acctNum != 0 && strcmp(client.firstName, searchName) == 0)
+        {
+            printf("%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
+            found = 1;
+        }
+    }
+
+    if (!found)
+    {
+        puts("No accounts found with that first name.");
+    }
+}
+
+// wipe all accounts
+void resetDatabase(FILE *fPtr)
+{
+    struct clientData blankClient = {0, "", "", 0.0};
+    char confirm;
+
+    printf("WARNING: This will delete ALL accounts. Are you sure? (y/n): ");
+    if (scanf(" %c", &confirm) != 1) {
+        clearInputBuffer();
+        return;
+    }
+
+    if (confirm == 'y' || confirm == 'Y') {
+        rewind(fPtr);
+        for (int i = 0; i < 100; i++) {
+            fwrite(&blankClient, sizeof(struct clientData), 1, fPtr);
+        }
+        puts("Database has been reset.");
+    } else {
+        puts("Database reset cancelled.");
+    }
+}
