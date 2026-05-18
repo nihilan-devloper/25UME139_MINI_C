@@ -29,6 +29,8 @@ void resetDatabase(FILE *fPtr);
 void clearInputBuffer(void);
 void logTransaction(const char *action, int acctNum, double amount, const char *details);
 int compareByBalance(const void *a, const void *b);
+void applyInterest(FILE *fPtr);
+void generateReport(FILE *readPtr);
 
 int main(int argc, char *argv[])
 {
@@ -46,7 +48,7 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 11)
+    while ((choice = enterChoice()) != 13)
     {
         switch (choice)
         {
@@ -79,6 +81,12 @@ int main(int argc, char *argv[])
             break;
         case 10:
             resetDatabase(cfPtr);
+            break;
+        case 11:
+            applyInterest(cfPtr);
+            break;
+        case 12:
+            generateReport(cfPtr);
             break;
         default:
             puts("Incorrect choice");
@@ -302,7 +310,9 @@ unsigned int enterChoice(void)
                  "8 - transfer funds\n"
                  "9 - search account by first name\n"
                  "10 - reset database\n"
-                 "11 - end program\n? ");
+                 "11 - apply interest\n"
+                 "12 - generate summary report\n"
+                 "13 - end program\n? ");
 
     if (scanf("%u", &menuChoice) != 1)
     {
@@ -596,4 +606,85 @@ void logTransaction(const char *action, int acctNum, double amount, const char *
                 timeStr, action, acctNum, amount, details);
         fclose(logPtr);
     }
+}
+
+// apply interest to all accounts
+void applyInterest(FILE *fPtr)
+{
+    struct clientData client = {0, "", "", 0.0};
+    double rate;
+
+    printf("Enter interest rate percentage (e.g., 5 for 5%%): ");
+    if (scanf("%lf", &rate) != 1) {
+        clearInputBuffer();
+        puts("Invalid input.");
+        return;
+    }
+
+    if (rate <= 0) {
+        puts("Interest rate must be positive.");
+        return;
+    }
+
+    rewind(fPtr);
+    int accountsUpdated = 0;
+    while (fread(&client, sizeof(struct clientData), 1, fPtr) == 1) {
+        if (client.acctNum != 0 && client.balance > 0) {
+            double interest = client.balance * (rate / 100.0);
+            client.balance += interest;
+
+            // move pointer back to overwrite
+            fseek(fPtr, -sizeof(struct clientData), SEEK_CUR);
+            fwrite(&client, sizeof(struct clientData), 1, fPtr);
+            // After fwrite, the pointer advances, so we fseek to current position to reset read/write state
+            fseek(fPtr, 0, SEEK_CUR); 
+
+            accountsUpdated++;
+
+            char details[50];
+            sprintf(details, "Interest applied: %.2f%%", rate);
+            logTransaction("INTEREST", client.acctNum, interest, details);
+        }
+    }
+    printf("Successfully applied %.2f%% interest to %d accounts.\n", rate, accountsUpdated);
+}
+
+// generate summary report of the bank
+void generateReport(FILE *readPtr)
+{
+    struct clientData client = {0, "", "", 0.0};
+    double totalBalance = 0.0;
+    double highestBalance = -999999999.0;
+    double lowestBalance = 999999999.0;
+    int highestAcct = 0, lowestAcct = 0;
+    int activeAccounts = 0;
+
+    rewind(readPtr);
+    while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1) {
+        if (client.acctNum != 0) {
+            totalBalance += client.balance;
+            activeAccounts++;
+            if (client.balance > highestBalance) {
+                highestBalance = client.balance;
+                highestAcct = client.acctNum;
+            }
+            if (client.balance < lowestBalance) {
+                lowestBalance = client.balance;
+                lowestAcct = client.acctNum;
+            }
+        }
+    }
+
+    if (activeAccounts == 0) {
+        puts("No active accounts to generate a report.");
+        return;
+    }
+
+    printf("\n--- BANK SUMMARY REPORT ---\n");
+    printf("Total Active Accounts: %d\n", activeAccounts);
+    printf("Total Assets:          $%.2f\n", totalBalance);
+    printf("Average Balance:       $%.2f\n", totalBalance / activeAccounts);
+    printf("Highest Balance:       $%.2f (Account #%d)\n", highestBalance, highestAcct);
+    printf("Lowest Balance:        $%.2f (Account #%d)\n", lowestBalance, lowestAcct);
+    printf("---------------------------\n\n");
 }
