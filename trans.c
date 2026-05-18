@@ -33,6 +33,8 @@ void applyInterest(FILE *fPtr);
 void generateReport(FILE *readPtr);
 void exportToCSV(FILE *readPtr);
 void accountStatement(void);
+void backupDatabase(FILE *readPtr);
+void restoreDatabase(FILE *writePtr);
 
 int main(int argc, char *argv[])
 {
@@ -60,7 +62,7 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 15)
+    while ((choice = enterChoice()) != 17)
     {
         switch (choice)
         {
@@ -105,6 +107,12 @@ int main(int argc, char *argv[])
             break;
         case 14:
             accountStatement();
+            break;
+        case 15:
+            backupDatabase(cfPtr);
+            break;
+        case 16:
+            restoreDatabase(cfPtr);
             break;
         default:
             puts("Incorrect choice");
@@ -332,7 +340,9 @@ unsigned int enterChoice(void)
                  "12 - generate summary report\n"
                  "13 - export database to CSV\n"
                  "14 - print account statement\n"
-                 "15 - end program\n? ");
+                 "15 - backup database\n"
+                 "16 - restore database\n"
+                 "17 - end program\n? ");
 
     if (scanf("%u", &menuChoice) != 1)
     {
@@ -780,4 +790,64 @@ void accountStatement(void)
     }
     printf("--------------------------------\n\n");
     fclose(logPtr);
+}
+
+// Backup database
+void backupDatabase(FILE *readPtr)
+{
+    FILE *writePtr;
+    struct clientData client = {0, "", "", 0.0};
+
+    if ((writePtr = fopen("backup.dat", "wb")) == NULL)
+    {
+        puts("Backup file could not be created.");
+    }
+    else
+    {
+        rewind(readPtr);
+        while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
+        {
+            fwrite(&client, sizeof(struct clientData), 1, writePtr);
+        }
+
+        fclose(writePtr);
+        puts("Successfully backed up database to backup.dat.");
+        logTransaction("BACKUP", 0, 0.0, "Database backup created");
+    }
+}
+
+// Restore database
+void restoreDatabase(FILE *writePtr)
+{
+    FILE *readPtr;
+    struct clientData client = {0, "", "", 0.0};
+    char confirm;
+
+    printf("WARNING: This will overwrite the current database with backup.dat. Are you sure? (y/n): ");
+    if (scanf(" %c", &confirm) != 1) {
+        clearInputBuffer();
+        return;
+    }
+
+    if (confirm != 'y' && confirm != 'Y') {
+        puts("Database restore cancelled.");
+        return;
+    }
+
+    if ((readPtr = fopen("backup.dat", "rb")) == NULL)
+    {
+        puts("Backup file could not be found.");
+    }
+    else
+    {
+        rewind(writePtr);
+        while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
+        {
+            fwrite(&client, sizeof(struct clientData), 1, writePtr);
+        }
+
+        fclose(readPtr);
+        puts("Successfully restored database from backup.dat.");
+        logTransaction("RESTORE", 0, 0.0, "Database restored from backup");
+    }
 }
