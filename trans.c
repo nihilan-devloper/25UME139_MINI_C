@@ -92,8 +92,10 @@ void textFile(FILE *readPtr)
     } // end if
     else
     {
+        double totalBalance = 0.0;
         rewind(readPtr); // sets pointer to beginning of file
         fprintf(writePtr, "%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+        fprintf(writePtr, "--------------------------------------------\n");
 
         // copy all records from random-access file into text file
         while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
@@ -103,8 +105,12 @@ void textFile(FILE *readPtr)
             {
                 fprintf(writePtr, "%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName,
                         client.balance);
+                totalBalance += client.balance;
             } // end if
         }     // end while
+
+        fprintf(writePtr, "--------------------------------------------\n");
+        fprintf(writePtr, "Total Bank Balance:                  %10.2f\n", totalBalance);
 
         fclose(writePtr); // fclose closes the file
     }                     // end else
@@ -120,7 +126,11 @@ void updateRecord(FILE *fPtr)
 
     // obtain number of account to update
     printf("%s", "Enter account to update ( 1 - 100 ): ");
-    scanf("%d", &account);
+    if (scanf("%d", &account) != 1)
+    {
+        clearInputBuffer();
+        account = 0; // Trigger the invalid check below
+    }
 
     if (account < 1 || account > 100)
     {
@@ -176,7 +186,11 @@ void deleteRecord(FILE *fPtr)
 
     // obtain number of account to delete
     printf("%s", "Enter account number to delete ( 1 - 100 ): ");
-    scanf("%d", &accountNum);
+    if (scanf("%d", &accountNum) != 1)
+    {
+        clearInputBuffer();
+        accountNum = 0; // Trigger the invalid check below
+    }
 
     if (accountNum < 1 || accountNum > 100)
     {
@@ -211,7 +225,11 @@ void newRecord(FILE *fPtr)
 
     // obtain number of account to create
     printf("%s", "Enter new account number ( 1 - 100 ): ");
-    scanf("%d", &accountNum);
+    if (scanf("%d", &accountNum) != 1)
+    {
+        clearInputBuffer();
+        accountNum = 0; // Trigger the invalid check below
+    }
 
     if (accountNum < 1 || accountNum > 100)
     {
@@ -232,7 +250,12 @@ void newRecord(FILE *fPtr)
     { // create record
         // user enters last name, first name and balance
         printf("%s", "Enter lastname, firstname, balance\n? ");
-        scanf("%14s%9s%lf", client.lastName, client.firstName, &client.balance);
+        if (scanf("%14s%9s%lf", client.lastName, client.firstName, &client.balance) != 3)
+        {
+            puts("Invalid input. Record creation cancelled.");
+            clearInputBuffer();
+            return;
+        }
 
         client.acctNum = accountNum;
         // move file pointer to correct record in file
@@ -275,10 +298,12 @@ void clearInputBuffer(void)
 // display all active accounts to the console
 void displayAccounts(FILE *readPtr)
 {
+    double totalBalance = 0.0;
     struct clientData client = {0, "", "", 0.0};
 
     rewind(readPtr); // sets pointer to beginning of file
     printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+    printf("--------------------------------------------\n");
 
     // read records and print
     while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
@@ -286,8 +311,11 @@ void displayAccounts(FILE *readPtr)
         if (client.acctNum != 0)
         {
             printf("%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
+            totalBalance += client.balance;
         }
     }
+    printf("--------------------------------------------\n");
+    printf("Total Bank Balance:                  %10.2f\n\n", totalBalance);
 } // end displayAccounts
 
 // search for account by last name
@@ -298,7 +326,12 @@ void searchAccount(FILE *readPtr)
     int found = 0;
 
     printf("Enter last name to search: ");
-    scanf("%14s", searchName);
+    if (scanf("%14s", searchName) != 1)
+    {
+        puts("Invalid input.");
+        clearInputBuffer();
+        return;
+    }
 
     rewind(readPtr); // sets pointer to beginning of file
     printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
