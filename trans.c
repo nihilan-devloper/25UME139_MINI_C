@@ -3,6 +3,7 @@
 // be placed in the file, and deletes data previously in the file.
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 // clientData structure definition
 struct clientData
 {
@@ -18,6 +19,9 @@ void textFile(FILE *readPtr);
 void updateRecord(FILE *fPtr);
 void newRecord(FILE *fPtr);
 void deleteRecord(FILE *fPtr);
+void displayAccounts(FILE *readPtr);
+void searchAccount(FILE *readPtr);
+void clearInputBuffer(void);
 
 int main(int argc, char *argv[])
 {
@@ -35,7 +39,7 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 5)
+    while ((choice = enterChoice()) != 7)
     {
         switch (choice)
         {
@@ -54,6 +58,14 @@ int main(int argc, char *argv[])
         // delete existing record
         case 4:
             deleteRecord(cfPtr);
+            break;
+        // display all accounts
+        case 5:
+            displayAccounts(cfPtr);
+            break;
+        // search accounts
+        case 6:
+            searchAccount(cfPtr);
             break;
         // display if user does not select valid choice
         default:
@@ -131,7 +143,19 @@ void updateRecord(FILE *fPtr)
 
         // request transaction amount from user
         printf("%s", "Enter charge ( + ) or payment ( - ): ");
-        scanf("%lf", &transaction);
+        if (scanf("%lf", &transaction) != 1)
+        {
+            puts("Invalid input. Transaction cancelled.");
+            clearInputBuffer();
+            return;
+        }
+
+        if (transaction < 0 && (client.balance + transaction) < 0)
+        {
+            printf("Error: Insufficient funds. Cannot withdraw %.2f from balance %.2f\n", -transaction, client.balance);
+            return;
+        }
+
         client.balance += transaction; // update record balance
 
         printf("%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
@@ -229,8 +253,68 @@ unsigned int enterChoice(void)
                  "2 - update an account\n"
                  "3 - add a new account\n"
                  "4 - delete an account\n"
-                 "5 - end program\n? ");
+                 "5 - display all active accounts\n"
+                 "6 - search account by last name\n"
+                 "7 - end program\n? ");
 
-    scanf("%u", &menuChoice); // receive choice from user
+    if (scanf("%u", &menuChoice) != 1)
+    {
+        clearInputBuffer();
+        menuChoice = 0; // return invalid choice
+    }
     return menuChoice;
 } // end function enterChoice
+
+// helper to clear input buffer
+void clearInputBuffer(void)
+{
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+}
+
+// display all active accounts to the console
+void displayAccounts(FILE *readPtr)
+{
+    struct clientData client = {0, "", "", 0.0};
+
+    rewind(readPtr); // sets pointer to beginning of file
+    printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+
+    // read records and print
+    while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
+    {
+        if (client.acctNum != 0)
+        {
+            printf("%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
+        }
+    }
+} // end displayAccounts
+
+// search for account by last name
+void searchAccount(FILE *readPtr)
+{
+    struct clientData client = {0, "", "", 0.0};
+    char searchName[15];
+    int found = 0;
+
+    printf("Enter last name to search: ");
+    scanf("%14s", searchName);
+
+    rewind(readPtr); // sets pointer to beginning of file
+    printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+
+    // read records and check name
+    while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
+    {
+        if (client.acctNum != 0 && strcmp(client.lastName, searchName) == 0)
+        {
+            printf("%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
+            found = 1;
+        }
+    }
+
+    if (!found)
+    {
+        puts("No accounts found with that last name.");
+    }
+} // end searchAccount
