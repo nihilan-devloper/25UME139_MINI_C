@@ -47,6 +47,16 @@ int main(int argc, char *argv[])
             printf("%s: File could not be opened.\n", argv[0]);
             exit(-1);
         }
+        else
+        {
+            // explicitly create 100 blank records to initialize the file properly
+            struct clientData blankClient = {0, "", "", 0.0};
+            for (int i = 0; i < 100; i++)
+            {
+                fwrite(&blankClient, sizeof(struct clientData), 1, cfPtr);
+            }
+            rewind(cfPtr); // reset pointer to beginning for subsequent operations
+        }
     }
 
     // enable user to specify action
