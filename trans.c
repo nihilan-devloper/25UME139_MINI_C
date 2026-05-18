@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 // clientData structure definition
 struct clientData
 {
@@ -26,6 +27,8 @@ void transferFunds(FILE *fPtr);
 void searchFirstName(FILE *readPtr);
 void resetDatabase(FILE *fPtr);
 void clearInputBuffer(void);
+void logTransaction(const char *action, int acctNum, double amount, const char *details);
+int compareByBalance(const void *a, const void *b);
 
 int main(int argc, char *argv[])
 {
@@ -183,6 +186,8 @@ void updateRecord(FILE *fPtr)
         fseek(fPtr, (account - 1) * sizeof(struct clientData), SEEK_SET);
         // write updated record over old record in file
         fwrite(&client, sizeof(struct clientData), 1, fPtr);
+        
+        logTransaction(transaction > 0 ? "DEPOSIT" : "WITHDRAWAL", account, transaction, "Account update");
     } // end else
 } // end function updateRecord
 
@@ -223,6 +228,8 @@ void deleteRecord(FILE *fPtr)
         // replace existing record with blank record
         fwrite(&blankClient, sizeof(struct clientData), 1, fPtr);
         printf("Account #%d successfully deleted.\n", accountNum);
+        
+        logTransaction("DELETE", accountNum, 0.0, "Account closed");
     } // end else
 } // end function deleteRecord
 
@@ -273,6 +280,8 @@ void newRecord(FILE *fPtr)
         // insert record in file
         fwrite(&client, sizeof(struct clientData), 1, fPtr);
         printf("Account #%d successfully created.\n", accountNum);
+        
+        logTransaction("CREATE", accountNum, client.balance, "Account opened");
     } // end else
 } // end function newRecord
 
@@ -310,25 +319,37 @@ void clearInputBuffer(void)
     while ((c = getchar()) != '\n' && c != EOF) {}
 }
 
-// display all active accounts to the console
+// display all active accounts to the console, sorted by balance
 void displayAccounts(FILE *readPtr)
 {
     double totalBalance = 0.0;
     struct clientData client = {0, "", "", 0.0};
+    struct clientData accounts[100];
+    int count = 0;
 
     rewind(readPtr); // sets pointer to beginning of file
-    printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
-    printf("--------------------------------------------\n");
 
-    // read records and print
+    // read records into array
     while (fread(&client, sizeof(struct clientData), 1, readPtr) == 1)
     {
         if (client.acctNum != 0)
         {
-            printf("%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName, client.balance);
+            accounts[count++] = client;
             totalBalance += client.balance;
         }
     }
+
+    // sort array by balance descending
+    qsort(accounts, count, sizeof(struct clientData), compareByBalance);
+
+    printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+    printf("--------------------------------------------\n");
+
+    for (int i = 0; i < count; i++)
+    {
+        printf("%-6d%-16s%-11s%10.2f\n", accounts[i].acctNum, accounts[i].lastName, accounts[i].firstName, accounts[i].balance);
+    }
+
     printf("--------------------------------------------\n");
     printf("Total Bank Balance:                  %10.2f\n\n", totalBalance);
 } // end displayAccounts
@@ -484,6 +505,12 @@ void transferFunds(FILE *fPtr)
     fwrite(&destClient, sizeof(struct clientData), 1, fPtr);
 
     printf("Successfully transferred %.2f from account %d to %d.\n", amount, sourceAcct, destAcct);
+    
+    char details[50];
+    sprintf(details, "Transfer to %d", destAcct);
+    logTransaction("TRANSFER_OUT", sourceAcct, amount, details);
+    sprintf(details, "Transfer from %d", sourceAcct);
+    logTransaction("TRANSFER_IN", destAcct, amount, details);
 }
 
 // search for account by first name
@@ -538,7 +565,35 @@ void resetDatabase(FILE *fPtr)
             fwrite(&blankClient, sizeof(struct clientData), 1, fPtr);
         }
         puts("Database has been reset.");
+        logTransaction("RESET", 0, 0.0, "Database wiped");
     } else {
         puts("Database reset cancelled.");
+    }
+}
+
+// Compare function for sorting by balance descending
+int compareByBalance(const void *a, const void *b)
+{
+    struct clientData *clientA = (struct clientData *)a;
+    struct clientData *clientB = (struct clientData *)b;
+    if (clientA->balance < clientB->balance) return 1;
+    if (clientA->balance > clientB->balance) return -1;
+    return 0;
+}
+
+// Log transactions to a text file
+void logTransaction(const char *action, int acctNum, double amount, const char *details)
+{
+    FILE *logPtr;
+    if ((logPtr = fopen("transactions.log", "a")) != NULL)
+    {
+        time_t t = time(NULL);
+        struct tm *tm_info = localtime(&t);
+        char timeStr[26];
+        strftime(timeStr, 26, "%Y-%m-%d %H:%M:%S", tm_info);
+
+        fprintf(logPtr, "[%s] %-12s Acct: %-4d Amount: %9.2f Details: %s\n", 
+                timeStr, action, acctNum, amount, details);
+        fclose(logPtr);
     }
 }
