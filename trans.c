@@ -21,6 +21,7 @@ void newRecord(FILE *fPtr);
 void deleteRecord(FILE *fPtr);
 void displayAccounts(FILE *readPtr);
 void searchAccount(FILE *readPtr);
+void readAccount(FILE *readPtr);
 void clearInputBuffer(void);
 
 int main(int argc, char *argv[])
@@ -39,7 +40,7 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 7)
+    while ((choice = enterChoice()) != 8)
     {
         switch (choice)
         {
@@ -66,6 +67,10 @@ int main(int argc, char *argv[])
         // search accounts
         case 6:
             searchAccount(cfPtr);
+            break;
+        // read specific account
+        case 7:
+            readAccount(cfPtr);
             break;
         // display if user does not select valid choice
         default:
@@ -213,6 +218,7 @@ void deleteRecord(FILE *fPtr)
         fseek(fPtr, (accountNum - 1) * sizeof(struct clientData), SEEK_SET);
         // replace existing record with blank record
         fwrite(&blankClient, sizeof(struct clientData), 1, fPtr);
+        printf("Account #%d successfully deleted.\n", accountNum);
     } // end else
 } // end function deleteRecord
 
@@ -262,6 +268,7 @@ void newRecord(FILE *fPtr)
         fseek(fPtr, (client.acctNum - 1) * sizeof(struct clientData), SEEK_SET);
         // insert record in file
         fwrite(&client, sizeof(struct clientData), 1, fPtr);
+        printf("Account #%d successfully created.\n", accountNum);
     } // end else
 } // end function newRecord
 
@@ -278,7 +285,8 @@ unsigned int enterChoice(void)
                  "4 - delete an account\n"
                  "5 - display all active accounts\n"
                  "6 - search account by last name\n"
-                 "7 - end program\n? ");
+                 "7 - read account by ID\n"
+                 "8 - end program\n? ");
 
     if (scanf("%u", &menuChoice) != 1)
     {
@@ -351,3 +359,37 @@ void searchAccount(FILE *readPtr)
         puts("No accounts found with that last name.");
     }
 } // end searchAccount
+
+// read a specific account by ID
+void readAccount(FILE *readPtr)
+{
+    struct clientData client = {0, "", "", 0.0};
+    unsigned int accountNum;
+
+    printf("Enter account number to read ( 1 - 100 ): ");
+    if (scanf("%d", &accountNum) != 1)
+    {
+        clearInputBuffer();
+        accountNum = 0; // Trigger the invalid check below
+    }
+
+    if (accountNum < 1 || accountNum > 100)
+    {
+        puts("Invalid account number.");
+        return;
+    }
+
+    fseek(readPtr, (accountNum - 1) * sizeof(struct clientData), SEEK_SET);
+    fread(&client, sizeof(struct clientData), 1, readPtr);
+
+    if (client.acctNum == 0)
+    {
+        printf("Account #%d has no information.\n", accountNum);
+    }
+    else
+    {
+        printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
+        printf("--------------------------------------------\n");
+        printf("%-6d%-16s%-11s%10.2f\n\n", client.acctNum, client.lastName, client.firstName, client.balance);
+    }
+} // end readAccount
