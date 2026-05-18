@@ -35,6 +35,9 @@ void exportToCSV(FILE *readPtr);
 void accountStatement(void);
 void backupDatabase(FILE *readPtr);
 void restoreDatabase(FILE *writePtr);
+int compareByName(const void *a, const void *b);
+int compareByAcctNum(const void *a, const void *b);
+void clearLog(void);
 
 int main(int argc, char *argv[])
 {
@@ -62,7 +65,7 @@ int main(int argc, char *argv[])
     }
 
     // enable user to specify action
-    while ((choice = enterChoice()) != 17)
+    while ((choice = enterChoice()) != 18)
     {
         switch (choice)
         {
@@ -113,6 +116,9 @@ int main(int argc, char *argv[])
             break;
         case 16:
             restoreDatabase(cfPtr);
+            break;
+        case 17:
+            clearLog();
             break;
         default:
             puts("Incorrect choice");
@@ -342,7 +348,8 @@ unsigned int enterChoice(void)
                  "14 - print account statement\n"
                  "15 - backup database\n"
                  "16 - restore database\n"
-                 "17 - end program\n? ");
+                 "17 - clear transaction log\n"
+                 "18 - end program\n? ");
 
     if (scanf("%u", &menuChoice) != 1)
     {
@@ -359,13 +366,24 @@ void clearInputBuffer(void)
     while ((c = getchar()) != '\n' && c != EOF) {}
 }
 
-// display all active accounts to the console, sorted by balance
+// display all active accounts to the console, sorted interactively
 void displayAccounts(FILE *readPtr)
 {
     double totalBalance = 0.0;
     struct clientData client = {0, "", "", 0.0};
     struct clientData accounts[100];
     int count = 0;
+
+    int sortChoice;
+    printf("\n--- SORT OPTIONS ---\n");
+    printf("1 - By Balance (Highest to Lowest)\n");
+    printf("2 - By Last Name (Alphabetical)\n");
+    printf("3 - By Account Number (Ascending)\n");
+    printf("Enter choice: ");
+    if (scanf("%d", &sortChoice) != 1) {
+        clearInputBuffer();
+        sortChoice = 1;
+    }
 
     rewind(readPtr); // sets pointer to beginning of file
 
@@ -379,8 +397,14 @@ void displayAccounts(FILE *readPtr)
         }
     }
 
-    // sort array by balance descending
-    qsort(accounts, count, sizeof(struct clientData), compareByBalance);
+    // sort array based on choice
+    if (sortChoice == 2) {
+        qsort(accounts, count, sizeof(struct clientData), compareByName);
+    } else if (sortChoice == 3) {
+        qsort(accounts, count, sizeof(struct clientData), compareByAcctNum);
+    } else {
+        qsort(accounts, count, sizeof(struct clientData), compareByBalance);
+    }
 
     printf("\n%-6s%-16s%-11s%10s\n", "Acct", "Last Name", "First Name", "Balance");
     printf("--------------------------------------------\n");
@@ -849,5 +873,45 @@ void restoreDatabase(FILE *writePtr)
         fclose(readPtr);
         puts("Successfully restored database from backup.dat.");
         logTransaction("RESTORE", 0, 0.0, "Database restored from backup");
+    }
+}
+
+// Compare function for sorting by last name alphabetically
+int compareByName(const void *a, const void *b)
+{
+    struct clientData *clientA = (struct clientData *)a;
+    struct clientData *clientB = (struct clientData *)b;
+    return strcmp(clientA->lastName, clientB->lastName);
+}
+
+// Compare function for sorting by account number ascending
+int compareByAcctNum(const void *a, const void *b)
+{
+    struct clientData *clientA = (struct clientData *)a;
+    struct clientData *clientB = (struct clientData *)b;
+    return clientA->acctNum - clientB->acctNum;
+}
+
+// Clear transaction log file
+void clearLog(void)
+{
+    char confirm;
+    printf("WARNING: This will permanently erase the transaction log. Are you sure? (y/n): ");
+    if (scanf(" %c", &confirm) != 1) {
+        clearInputBuffer();
+        return;
+    }
+
+    if (confirm == 'y' || confirm == 'Y') {
+        FILE *logPtr = fopen("transactions.log", "w");
+        if (logPtr != NULL) {
+            fclose(logPtr);
+            puts("Transaction log has been successfully cleared.");
+            logTransaction("SYSTEM", 0, 0.0, "Transaction log was cleared");
+        } else {
+            puts("Error clearing transaction log.");
+        }
+    } else {
+        puts("Clear log operation cancelled.");
     }
 }
